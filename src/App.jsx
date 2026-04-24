@@ -3,6 +3,18 @@ import './styles.css'
 
 const SIZE = 9
 const ACTIONS = ['invest', 'expand', 'innovate', 'spy', 'sabotage', 'protect']
+const DR_BOZWARD_PROFILE = {
+  name: 'Dr Bozward',
+  title: 'The Strategic Professor',
+  style: 'Innovation-led strategist with a sharp instinct for market control.',
+  bias: {
+    innovationHub: 35,
+    playerThreat: 1.8,
+    controlledCluster: 8,
+    underProtectedSabotage: 18
+  },
+  maxActions: 3
+}
 const TYPES = [
   { id: 'emerging', name: 'Emerging', growth: 1.35, stability: 0.8 },
   { id: 'stable', name: 'Stable', growth: 1, stability: 1.15 },
@@ -12,7 +24,7 @@ const TYPES = [
 ]
 
 const clone = (state) => structuredClone(state)
-const playerName = (id) => (id === 'p1' ? 'Player Corporation' : 'Dr Bozward')
+const playerName = (id) => (id === 'p1' ? 'Player Corporation' : DR_BOZWARD_PROFILE.name)
 const opponent = (id) => (id === 'p1' ? 'ai' : 'p1')
 
 function neighbours(id) {
@@ -62,12 +74,13 @@ function createGame() {
     selectedAction: 'invest',
     selectedTile: 0,
     amount: 50,
+    opponentProfile: DR_BOZWARD_PROFILE,
     players: {
       p1: { capital: 500, revenue: 0 },
       ai: { capital: 500, revenue: 0 }
     },
     tiles,
-    log: ['Game started: compete against Dr Bozward and dominate 60% of total market value or lead after 40 turns.'],
+    log: ['Game started: Dr Bozward will favour innovation hubs, cluster control, and strategic disruption.'],
     winner: null
   }
 }
@@ -101,11 +114,13 @@ function applyAction(state, id, action, tileId, amount = 50) {
   const tile = s.tiles[tileId]
   const rival = opponent(id)
   const player = s.players[id]
-  const cost = action === 'innovate' ? 120 : action === 'spy' ? 35 : action === 'protect' ? 60 : amount
+  const isBozward = id === 'ai'
+  const cost = action === 'innovate' ? (isBozward ? 95 : 120) : action === 'spy' ? 35 : action === 'protect' ? 60 : amount
   if (!tile || player.capital < cost) return state
 
   if (action === 'invest') {
-    const gain = (amount * (1 + tile.upgrades[id] * 0.15)) / tile.stability
+    const personalityBoost = isBozward && tile.marketType === 'innovation' ? 1.18 : 1
+    const gain = (amount * (1 + tile.upgrades[id] * 0.15) * personalityBoost) / tile.stability
     tile.share[id] += gain
     player.capital -= amount
     normalise(tile)
@@ -115,7 +130,7 @@ function applyAction(state, id, action, tileId, amount = 50) {
   if (action === 'expand') {
     const hasAdjacentControl = neighbours(tileId).some(n => controller(s.tiles[n]) === id)
     if (!hasAdjacentControl && tile.share[id] < 20) return state
-    tile.share[id] += 22
+    tile.share[id] += isBozward ? 26 : 22
     player.capital -= cost
     normalise(tile)
     s.log.unshift(`${playerName(id)} expanded into sector ${tileId}.`)
@@ -123,10 +138,10 @@ function applyAction(state, id, action, tileId, amount = 50) {
 
   if (action === 'innovate') {
     tile.upgrades[id] += 1
-    tile.share[id] += 8
+    tile.share[id] += isBozward ? 12 : 8
     player.capital -= cost
     normalise(tile)
-    s.log.unshift(`${playerName(id)} innovated in sector ${tileId}.`)
+    s.log.unshift(`${playerName(id)} applied an innovation-led strategy in sector ${tileId}.`)
   }
 
   if (action === 'spy') {
@@ -138,10 +153,11 @@ function applyAction(state, id, action, tileId, amount = 50) {
   }
 
   if (action === 'sabotage') {
-    const damage = Math.max(4, 22 - tile.protection[rival] * 6)
+    const personalityDamage = isBozward && tile.protection[rival] === 0 ? 6 : 0
+    const damage = Math.max(4, 22 + personalityDamage - tile.protection[rival] * 6)
     tile.share[rival] = Math.max(0, tile.share[rival] - damage)
     player.capital -= cost
-    s.log.unshift(`${playerName(id)} sabotaged sector ${tileId}, reducing rival share by ${damage}.`)
+    s.log.unshift(`${playerName(id)} disrupted sector ${tileId}, reducing rival share by ${damage}.`)
   }
 
   if (action === 'protect') {
@@ -165,21 +181,38 @@ function endHumanTurn(state) {
   return runDrBozwardTurn(s)
 }
 
+function scoreForDrBozward(state, tile) {
+  const profile = state.opponentProfile.bias
+  const clusterScore = neighbours(tile.id).filter(n => controller(state.tiles[n]) === 'ai').length * profile.controlledCluster
+  const innovationBonus = tile.marketType === 'innovation' ? profile.innovationHub : 0
+  const threatScore = tile.share.p1 * profile.playerThreat
+  const weakProtectionBonus = tile.share.p1 > 30 && tile.protection.p1 === 0 ? profile.underProtectedSabotage : 0
+  return tile.value * tile.growth + threatScore + innovationBonus + clusterScore + weakProtectionBonus - tile.share.ai
+}
+
+function chooseDrBozwardAction(tile) {
+  if (tile.share.p1 > 42 && tile.protection.p1 < 2) return 'sabotage'
+  if (tile.marketType === 'innovation' && tile.upgrades.ai < 2) return 'innovate'
+  if (tile.share.ai > 35 && tile.upgrades.ai < 2) return 'innovate'
+  if (tile.share.ai < 18) return 'expand'
+  return 'invest'
+}
+
 function runDrBozwardTurn(state) {
   let s = clone(state)
-  const scored = s.tiles.map(t => ({ id: t.id, score: t.value * t.growth + t.share.p1 * 1.2 - t.share.ai })).sort((a, b) => b.score - a.score)
+  const scored = s.tiles.map(t => ({ id: t.id, score: scoreForDrBozward(s, t) })).sort((a, b) => b.score - a.score)
   const choices = scored.slice(0, 8)
-  for (let i = 0; i < 3; i++) {
-    const target = choices[Math.floor(Math.random() * choices.length)].id
+  for (let i = 0; i < s.opponentProfile.maxActions; i++) {
+    const target = choices[i % choices.length].id
     const t = s.tiles[target]
-    const action = t.share.p1 > 35 ? 'sabotage' : t.share.ai > 35 ? 'innovate' : 'invest'
-    s = applyAction(s, 'ai', action, target, action === 'invest' ? 60 : 50)
+    const action = chooseDrBozwardAction(t)
+    s = applyAction(s, 'ai', action, target, action === 'invest' ? 70 : 50)
   }
   s.players.ai.revenue = revenueFor(s, 'ai')
   s.players.ai.capital += s.players.ai.revenue
   s.actionsRemaining = 3
   s.turn += 1
-  s.log.unshift(`Dr Bozward earned ${s.players.ai.revenue} capital.`)
+  s.log.unshift(`${s.opponentProfile.name} earned ${s.players.ai.revenue} capital.`)
   checkWinner(s)
   return s
 }
@@ -197,7 +230,7 @@ export default function App() {
         <div>
           <p className="eyebrow">Business strategy · deception · market control</p>
           <h1>Market Domination Grid</h1>
-          <p>Compete against Dr Bozward. Control 60% of market value before turn 40. Each turn gives you three actions.</p>
+          <p>Compete against Dr Bozward, an innovation-led strategist who targets market clusters and weakly protected sectors.</p>
         </div>
         <button onClick={() => setState(createGame())}>New Game</button>
       </header>
@@ -234,6 +267,10 @@ export default function App() {
         </section>
 
         <aside className="panel">
+          <h2>Dr Bozward Profile</h2>
+          <p><strong>{state.opponentProfile.title}</strong></p>
+          <p>{state.opponentProfile.style}</p>
+          <p>Bias: innovation hubs, clustered sectors, and unprotected rival positions.</p>
           <h2>Sector Intel</h2>
           <p>Sector {selected.id}: {selected.name}</p>
           <p>Value: {selected.value}</p>
