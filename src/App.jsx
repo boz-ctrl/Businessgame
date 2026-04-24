@@ -12,7 +12,7 @@ const TYPES = [
 ]
 
 const clone = (state) => structuredClone(state)
-const playerName = (id) => (id === 'p1' ? 'Player Corporation' : 'AI Rival Corp')
+const playerName = (id) => (id === 'p1' ? 'Player Corporation' : 'Dr Bozward')
 const opponent = (id) => (id === 'p1' ? 'ai' : 'p1')
 
 function neighbours(id) {
@@ -67,7 +67,7 @@ function createGame() {
       ai: { capital: 500, revenue: 0 }
     },
     tiles,
-    log: ['Game started: dominate 60% of total market value or lead after 40 turns.'],
+    log: ['Game started: compete against Dr Bozward and dominate 60% of total market value or lead after 40 turns.'],
     winner: null
   }
 }
@@ -162,10 +162,10 @@ function endHumanTurn(state) {
   s.players.p1.revenue = revenueFor(s, 'p1')
   s.players.p1.capital += s.players.p1.revenue
   s.log.unshift(`Player Corporation earned ${s.players.p1.revenue} capital.`)
-  return runAiTurn(s)
+  return runDrBozwardTurn(s)
 }
 
-function runAiTurn(state) {
+function runDrBozwardTurn(state) {
   let s = clone(state)
   const scored = s.tiles.map(t => ({ id: t.id, score: t.value * t.growth + t.share.p1 * 1.2 - t.share.ai })).sort((a, b) => b.score - a.score)
   const choices = scored.slice(0, 8)
@@ -179,7 +179,7 @@ function runAiTurn(state) {
   s.players.ai.capital += s.players.ai.revenue
   s.actionsRemaining = 3
   s.turn += 1
-  s.log.unshift(`AI Rival Corp earned ${s.players.ai.revenue} capital.`)
+  s.log.unshift(`Dr Bozward earned ${s.players.ai.revenue} capital.`)
   checkWinner(s)
   return s
 }
@@ -197,7 +197,7 @@ export default function App() {
         <div>
           <p className="eyebrow">Business strategy · deception · market control</p>
           <h1>Market Domination Grid</h1>
-          <p>Control 60% of market value before turn 40. Each turn gives you three actions.</p>
+          <p>Compete against Dr Bozward. Control 60% of market value before turn 40. Each turn gives you three actions.</p>
         </div>
         <button onClick={() => setState(createGame())}>New Game</button>
       </header>
@@ -209,9 +209,9 @@ export default function App() {
           <h2>Command Centre</h2>
           <p>Turn {state.turn} · Actions remaining: {state.actionsRemaining}</p>
           <p>Player capital: {Math.floor(state.players.p1.capital)} · Revenue: {state.players.p1.revenue}</p>
-          <p>AI capital: {Math.floor(state.players.ai.capital)} · Revenue: {state.players.ai.revenue}</p>
+          <p>Dr Bozward capital: {Math.floor(state.players.ai.capital)} · Revenue: {state.players.ai.revenue}</p>
           <p>Player control: {Math.round(controlledValue(state, 'p1') / totalValue * 100)}%</p>
-          <p>AI control: {Math.round(controlledValue(state, 'ai') / totalValue * 100)}%</p>
+          <p>Dr Bozward control: {Math.round(controlledValue(state, 'ai') / totalValue * 100)}%</p>
           <div className="actions">
             {ACTIONS.map(a => <button key={a} className={state.selectedAction === a ? 'active' : ''} onClick={() => setState({ ...state, selectedAction: a })}>{a}</button>)}
           </div>
@@ -238,9 +238,9 @@ export default function App() {
           <p>Sector {selected.id}: {selected.name}</p>
           <p>Value: {selected.value}</p>
           <p>Player share: {Math.round(selected.share.p1)}%</p>
-          <p>AI share: {Math.round(selected.share.ai)}%</p>
-          <p>Protection: P{selected.protection.p1} / AI{selected.protection.ai}</p>
-          <p>Upgrades: P{selected.upgrades.p1} / AI{selected.upgrades.ai}</p>
+          <p>Dr Bozward share: {Math.round(selected.share.ai)}%</p>
+          <p>Protection: P{selected.protection.p1} / DrB{selected.protection.ai}</p>
+          <p>Upgrades: P{selected.upgrades.p1} / DrB{selected.upgrades.ai}</p>
           <h2>Log</h2>
           <div className="log">{state.log.slice(0, 12).map((l, i) => <p key={i}>{l}</p>)}</div>
         </aside>
